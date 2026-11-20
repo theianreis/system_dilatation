@@ -1,6 +1,11 @@
+"""Conexão com o SQLite e persistência das medições."""
+
 from pathlib import Path
-from sqlalchemy import (create_engine,MetaData,Table,Column,Integer,Float,)
+
+from sqlalchemy import create_engine
 from sqlalchemy.dialects.sqlite import insert
+
+from .models import TABELAS, metadata
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 DB_PATH = BASE_DIR / "data" / "database" / "sensores.db"
@@ -8,29 +13,6 @@ DB_PATH.parent.mkdir(parents=True,exist_ok=True)
 
 # Conectar com sqlite
 engine = create_engine(f"sqlite:///{DB_PATH}",echo=False)
-metadata = MetaData()
-
-## Célula + H711 -> Tabela
-hx711 = Table(
-    "célula",
-    metadata,
-    Column("leitura", Integer, primary_key=True),
-    Column("tempo_s", Float, nullable=False),
-    Column("bits_medido", Float, nullable=False),
-    Column("deltaL_mm", Float, nullable=False),
-)
-
-## termistor -> Tabela
-termistor = Table(
-    "termistor",
-    metadata,
-    Column("leitura", Integer, primary_key=True),
-    Column("tempo_s", Float, nullable=False),
-    Column("bits_medido", Float, nullable=False),
-    Column("temperatura_C", Float, nullable=False),
-)
-
-TABELAS = {"hx711": hx711,"termistor": termistor,}
 
 def criar_banco():
      metadata.create_all(engine)
