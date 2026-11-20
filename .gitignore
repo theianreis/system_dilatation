@@ -111,3 +111,6 @@ desktop.ini
 *~
 *.swp
 *.swo
+
+# Estudos locais
+/estudos/
