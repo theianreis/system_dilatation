@@ -76,7 +76,7 @@ class EtlIntegrationTest(unittest.TestCase):
                 self.cli(*argumentos)
                 self.cli(*argumentos)
                 self.assertEqual(
-                    set(inspect(self.engine).get_table_names()), {"ensaios", "célula", "termistor"}
+                    set(inspect(self.engine).get_table_names()), set(models.metadata.tables)
                 )
                 for sensor in models.TABELAS:
                     registros = self.registros(sensor, ensaio_id)

@@ -1,4 +1,7 @@
 import argparse
+import os
+from tempfile import NamedTemporaryFile
+from sqlalchemy.exc import SQLAlchemyError
 from pathlib import Path
 
 import pandas as pd
@@ -16,7 +19,18 @@ from ..database.sqlite import (
 def salvar_csv(dados: pd.DataFrame, caminho: str | Path) -> None:
     caminho = Path(caminho)
     caminho.parent.mkdir(parents=True, exist_ok=True)
-    dados.to_csv(caminho, index=False, encoding="utf-8")
+    temporario = None
+    try:
+        with NamedTemporaryFile(mode='w', encoding='utf-8', newline='', dir=caminho.parent,
+                                prefix='.' + caminho.name, delete=False) as arquivo:
+            temporario = Path(arquivo.name)
+            dados.to_csv(arquivo, index=False)
+            arquivo.flush()
+            os.fsync(arquivo.fileno())
+        os.replace(temporario, caminho)
+    finally:
+        if temporario is not None:
+            temporario.unlink(missing_ok=True)
 
 
 def executar_etl(
@@ -37,7 +51,13 @@ def executar_etl(
 
     dados_tratados.insert(0, "ensaio_id", ensaio_id)
     salvar_dados(dados_tratados, sensor, ensaio_id)
-    salvar_csv(dados_tratados, saida)
+    try:
+        salvar_csv(dados_tratados, saida)
+    except OSError as erro:
+        raise RuntimeError(
+            f"Banco confirmado para ensaio {ensaio_id}, sensor {sensor}; exportação pendente: {saida}. "
+            "Use o comando exportar para recuperar a série armazenada."
+        ) from erro
     print(f"[ETL] {sensor}: {len(dados_tratados)} registros processados. Ensaio: {ensaio_id}")
     return dados_tratados
 
@@ -58,6 +78,12 @@ def main():
         parser.error("Informe --celula e/ou --termistor.")
 
     try:
+        # Detecta formato/valores inválidos em qualquer sensor antes do primeiro commit.
+        for sensor in ('celula', 'termistor'):
+            entrada = getattr(args, sensor)
+            if entrada is not None:
+                bruto = extract_csv(entrada)
+                (transform_celula if sensor == 'celula' else transform_termistor)(bruto)
         criar_banco()
         ensaio_id = args.ensaio_id
         if args.novo_ensaio is not None:
@@ -69,7 +95,7 @@ def main():
             entrada = getattr(args, sensor)
             if entrada is not None:
                 executar_etl(sensor, entrada, saida / f"{sensor}_limpo.csv", ensaio_id)
-    except (ValueError, RuntimeError) as erro:
+    except (ValueError, RuntimeError, OSError, SQLAlchemyError) as erro:
         parser.error(str(erro))
 
 

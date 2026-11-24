@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 def validar_dados(dados: pd.DataFrame,colunas: list[str]) -> pd.DataFrame:
     faltantes = [
@@ -18,6 +19,8 @@ def validar_dados(dados: pd.DataFrame,colunas: list[str]) -> pd.DataFrame:
             errors="raise")
     if resultado.isna().any().any():
         raise ValueError("Foram encontrados valores ausentes")
+    if not np.isfinite(resultado.to_numpy()).all():
+        raise ValueError("Os valores devem ser finitos.")
     # A leitura deve ser um índice inteiro positivo.
     leitura = resultado["leitura"]
     if ((leitura < 1).any()or (leitura % 1 != 0).any()):

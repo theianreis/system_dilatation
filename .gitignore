@@ -114,3 +114,6 @@ desktop.ini
 
 # Estudos locais
 /estudos/
+
+# Backups e relatórios locais de migração
+/data/backups/

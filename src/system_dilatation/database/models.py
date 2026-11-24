@@ -51,3 +51,33 @@ termistor = Table(
 )
 
 TABELAS = {"celula": hx711, "termistor": termistor}
+
+# Aquisição bruta: identidade independente da numeração histórica de leituras.
+sessoes = Table(
+    'sessoes', metadata,
+    Column('id', String, primary_key=True),
+    Column('ensaio_id', String, ForeignKey('ensaios.id', ondelete='RESTRICT'), nullable=False),
+    Column('fonte_sha256', String, nullable=False),
+    Column('indice', Integer, nullable=False),
+    Column('criado_em', String, nullable=False),
+    Column('metadados_json', String, nullable=False),
+)
+eventos = Table(
+    'eventos', metadata,
+    Column('sessao_id', String, ForeignKey('sessoes.id', ondelete='RESTRICT'), primary_key=True),
+    Column('linha', Integer, primary_key=True),
+    Column('texto', String, nullable=False),
+)
+ciclos = Table(
+    'ciclos', metadata,
+    Column('sessao_id', String, ForeignKey('sessoes.id', ondelete='RESTRICT'), primary_key=True),
+    Column('cycle', Integer, primary_key=True),
+    Column('linha', Integer, nullable=False),
+    Column('dados_json', String, nullable=False),
+)
+calibracoes = Table(
+    'calibracoes', metadata,
+    Column('id', String, primary_key=True),
+    Column('criado_em', String, nullable=False),
+    Column('parametros_json', String, nullable=False),
+)

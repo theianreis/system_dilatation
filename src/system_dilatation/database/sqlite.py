@@ -2,21 +2,23 @@
 
 from datetime import datetime, timezone
 from pathlib import Path
+import os
 from uuid import uuid4
 
-from sqlalchemy import create_engine, event, inspect, select
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.dialects.sqlite import insert
 
 from .models import ESTADOS, TABELAS, ensaios, metadata
+from .schema import VERSAO, objetos, reconhecer
+from ..validation import validar_serie
 
-BASE_DIR = Path(__file__).resolve().parents[3]
-DB_PATH = BASE_DIR / "data" / "database" / "sensores.db"
+BASE_DIR = Path.cwd()
+DB_PATH = Path(os.environ.get("SYSTEM_DILATATION_DB", BASE_DIR / "data" / "database" / "sensores.db"))
 
 
 def criar_engine(caminho: str | Path = DB_PATH):
     """Cria um engine com integridade referencial habilitada no SQLite."""
     caminho = Path(caminho)
-    caminho.parent.mkdir(parents=True, exist_ok=True)
     novo_engine = create_engine(f"sqlite:///{caminho}", echo=False)
 
     @event.listens_for(novo_engine, "connect")
@@ -35,36 +37,21 @@ engine = criar_engine()
 
 def criar_banco():
     """Cria o esquema novo; recusa bancos que exigem migração prévia."""
+    if engine.url.database and engine.url.database != ':memory:':
+        Path(engine.url.database).parent.mkdir(parents=True, exist_ok=True)
     with engine.begin() as conexao:
-        inspetor = inspect(conexao)
-        existentes = set(inspetor.get_table_names())
-        if existentes:
-            compativel = existentes == set(metadata.tables)
-            if compativel:
-                for nome, tabela in metadata.tables.items():
-                    colunas = {coluna["name"] for coluna in inspetor.get_columns(nome)}
-                    chave = inspetor.get_pk_constraint(nome)["constrained_columns"]
-                    if colunas != set(tabela.c.keys()) or chave != [
-                        coluna.name for coluna in tabela.primary_key
-                    ]:
-                        compativel = False
-                        break
-                for tabela in TABELAS.values():
-                    referencias = inspetor.get_foreign_keys(tabela.name)
-                    if not any(
-                        fk["constrained_columns"] == ["ensaio_id"]
-                        and fk["referred_table"] == "ensaios"
-                        and fk["referred_columns"] == ["id"]
-                        and fk.get("options", {}).get("ondelete", "").upper() == "RESTRICT"
-                        for fk in referencias
-                    ):
-                        compativel = False
-            if not compativel:
-                raise RuntimeError(
-                    "Esquema de banco incompatível. Preserve os dados e execute "
-                    "uma migração antes de usar esta versão."
-                )
-        metadata.create_all(conexao)
+        banco = conexao.connection.driver_connection
+        versao = banco.execute("PRAGMA user_version").fetchone()[0]
+        if objetos(banco) or versao:
+            try:
+                esquema = reconhecer(banco)
+            except ValueError as erro:
+                raise RuntimeError(f"Esquema incompatível; execute a migração: {erro}") from erro
+            if esquema != "atual":
+                raise RuntimeError("Execute a migração explícita para versionar ou atualizar o banco.")
+        else:
+            metadata.create_all(conexao)
+            conexao.exec_driver_sql(f"PRAGMA user_version={VERSAO}")
 
 
 def criar_ensaio(nome: str, descricao: str | None = None, estado: str = "RASCUNHO") -> str:
@@ -119,6 +106,19 @@ def salvar_dados(dados, sensor: str, ensaio_id: str):
     registros = dados.assign(ensaio_id=ensaio_id).to_dict(orient="records")
     with engine.begin() as conexao:
         _validar_ensaio(conexao, ensaio_id)
+        # Valida o resultado final do upsert antes de modificar qualquer registro.
+        existentes = {r[0]: tuple(r) for r in conexao.execute(
+            select(*[c for c in tabela.c if c.name != "ensaio_id"])
+            .where(tabela.c.ensaio_id == ensaio_id)
+        )}
+        campos = [c.name for c in tabela.c if c.name != "ensaio_id"]
+        vistos = set()
+        for r in registros:
+            if r["leitura"] in vistos:
+                raise ValueError("Leitura duplicada no lote.")
+            vistos.add(r["leitura"])
+            existentes[r["leitura"]] = tuple(r[c] for c in campos)
+        validar_serie(existentes.values())
         for registro in registros:
             comando = insert(tabela).values(**registro)
             atualizacao = {
