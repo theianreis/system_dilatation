@@ -1,2 +1,6 @@
-def main() -> None:
-    print("Hello from system-dilatation!")
+"""Sistema de aquisição e análise por ensaio."""
+
+
+def main():
+    from .cli import main as executar
+    executar()

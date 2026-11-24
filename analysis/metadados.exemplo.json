@@ -1,0 +1,5 @@
+{
+  "barra_aluminio": {"arquivo": "barra_alumino.txt", "material": "Alumínio", "comprimento_mm": 545},
+  "barra_escura": {"arquivo": "barra_escura.txt", "material": "Não identificado — barra escura", "comprimento_mm": 545},
+  "barra_clara": {"arquivo": "barra _clara_.txt", "material": "Não identificado — barra clara", "comprimento_mm": 545}
+}
