@@ -1,0 +1,14 @@
+.git
+.venv
+.codex
+.agents
+.aws
+estudos
+data
+firmware
+tests
+__pycache__
+*.pyc
+.env*
+dist
+build

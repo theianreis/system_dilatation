@@ -1,0 +1,8 @@
+services:
+  app:
+    build: .
+    volumes:
+      - ./data:/data
+    environment:
+      SYSTEM_DILATATION_DB: /data/database/sensores.db
+    command: ["--help"]
